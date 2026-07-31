@@ -1,4 +1,3 @@
-```markdown
 ## Core System Flow
 ### 1. **Backend / Database** Import public CER project information
 The system regularly imports publicly available project information from the Clean Energy Regulator (CER). This may be collected from public datasets, downloadable register files, or other approved public sources.
@@ -427,4 +426,4 @@ A suitable disclaimer is:
 23. **Backend / Database** CER updates change only official CER fields.
 24. **Backend / Database** Seller-managed information remains separate and is not overwritten.
 25. **Frontend / Backend / Database** All information is labelled as CER-sourced, seller-provided, or platform-verified.
-```
+
