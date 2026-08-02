@@ -1,0 +1,40 @@
+/*
+  Design language: "Registry ledger" — modelled on an official certificate
+  / land-title register rather than a generic eco-green landing page. Deep
+  ink-green for authority, aged brass for the seal/certificate motif,
+  eucalyptus for the "verified" state, sage paper for the working surface.
+*/
+:root {
+  /* Colour */
+  --ink: #12211d;          /* primary dark surface (nav, hero, sidebar) */
+  --ink-soft: #1c3229;      /* secondary dark surface */
+  --paper: #eef1e8;         /* app background, cool sage-grey paper */
+  --surface: #fbfbf6;       /* card surface on paper */
+  --surface-ink: #17251f;   /* card surface on ink */
+  --text: #16231d;          /* primary text on paper */
+  --text-soft: #4b5c53;     /* secondary text on paper */
+  --text-on-ink: #eef1e8;   /* primary text on ink */
+  --text-on-ink-soft: #a9bdb0; /* secondary text on ink */
+  --line: rgba(22, 35, 29, 0.14);
+  --line-on-ink: rgba(238, 241, 232, 0.16);
+  --verified: #2f7a57;      /* eucalyptus green — verified / positive */
+  --verified-soft: #e2ede5;
+  --brass: #b1832f;         /* certificate-seal brass — price, stamp */
+  --brass-soft: #f3e6c9;
+  --rust: #a8442c;          /* rejected / negative, used sparingly */
+  --rust-soft: #f3ded8;
+  --amber: #96721f;         /* pending / needs-attention */
+  --amber-soft: #f1e6cd;
+
+  /* Type */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+
+  /* Shape / rhythm */
+  --radius: 3px;
+  --radius-lg: 6px;
+  --shadow-card: 0 1px 2px rgba(18, 33, 29, 0.06), 0 6px 20px rgba(18, 33, 29, 0.06);
+  --shadow-modal: 0 20px 60px rgba(18, 33, 29, 0.35);
+  --container: 1180px;
+}
