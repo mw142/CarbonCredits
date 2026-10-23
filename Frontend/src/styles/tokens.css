@@ -1,40 +1,64 @@
 /*
-  Design language: "Registry ledger" — modelled on an official certificate
-  / land-title register rather than a generic eco-green landing page. Deep
-  ink-green for authority, aged brass for the seal/certificate motif,
-  eucalyptus for the "verified" state, sage paper for the working surface.
+  renewCo. design tokens (built by IrongateIT)
+
+  Taken from the renewCo. mark: a mint-to-aqua ribbon with a deep navy dot on a cool
+  off-white. The reference site (renew-co.com.au) is a minimal, mostly monochrome
+  "infrastructure" look with numbered sections and generous space, so the palette is
+  near-black navy on off-white, with the logo gradient as the only accent.
 */
 :root {
-  /* Colour */
-  --ink: #12211d;          /* primary dark surface (nav, hero, sidebar) */
-  --ink-soft: #1c3229;      /* secondary dark surface */
-  --paper: #eef1e8;         /* app background, cool sage-grey paper */
-  --surface: #fbfbf6;       /* card surface on paper */
-  --surface-ink: #17251f;   /* card surface on ink */
-  --text: #16231d;          /* primary text on paper */
-  --text-soft: #4b5c53;     /* secondary text on paper */
-  --text-on-ink: #eef1e8;   /* primary text on ink */
-  --text-on-ink-soft: #a9bdb0; /* secondary text on ink */
-  --line: rgba(22, 35, 29, 0.14);
-  --line-on-ink: rgba(238, 241, 232, 0.16);
-  --verified: #2f7a57;      /* eucalyptus green — verified / positive */
-  --verified-soft: #e2ede5;
-  --brass: #b1832f;         /* certificate-seal brass — price, stamp */
-  --brass-soft: #f3e6c9;
-  --rust: #a8442c;          /* rejected / negative, used sparingly */
-  --rust-soft: #f3ded8;
-  --amber: #96721f;         /* pending / needs-attention */
-  --amber-soft: #f1e6cd;
+  /* Brand */
+  --mint: #85edd0;
+  --aqua: #7fe8de;
+  --mint-green: #87f0c7;
+  --brand-gradient: linear-gradient(100deg, #85edd0 0%, #7fe8de 50%, #87f0c7 100%);
+  --mint-ink: #0f7a66;      /* accessible mint for text/icons on light surfaces */
+  --mint-tint: #e3faf4;
+
+  /* Neutrals */
+  --ink: #131b29;           /* logo dot — primary dark surface and text */
+  --ink-soft: #1f2a3c;
+  --ink-raised: #263349;
+  --paper: #f6f8fb;         /* logo background — app background */
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --text: #131b29;
+  --text-soft: #5b6678;
+  --text-faint: #8a93a3;
+  --text-on-ink: #f6f8fb;
+  --text-on-ink-soft: #aab4c3;
+  --line: rgba(19, 27, 41, 0.11);
+  --line-strong: rgba(19, 27, 41, 0.22);
+  --line-on-ink: rgba(246, 248, 251, 0.14);
+
+  /* States (kept from the registry build, retuned to the new palette) */
+  --verified: #0f7a66;
+  --verified-soft: #e3faf4;
+  --brass: #0f7a66;         /* legacy alias: accents now use mint ink */
+  --brass-soft: #e3faf4;
+  --rust: #b4412b;
+  --rust-soft: #fbe9e5;
+  --amber: #93670f;
+  --amber-soft: #fbf1db;
+
+  /* Data series */
+  --series-1: #131b29;
+  --series-2: #2bb39a;
+  --series-3: #8fd9f0;
+  --series-4: #c4ccd8;
 
   /* Type */
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
 
   /* Shape / rhythm */
-  --radius: 3px;
-  --radius-lg: 6px;
-  --shadow-card: 0 1px 2px rgba(18, 33, 29, 0.06), 0 6px 20px rgba(18, 33, 29, 0.06);
-  --shadow-modal: 0 20px 60px rgba(18, 33, 29, 0.35);
-  --container: 1180px;
+  --radius: 10px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(19, 27, 41, 0.04), 0 8px 24px rgba(19, 27, 41, 0.05);
+  --shadow-lift: 0 2px 6px rgba(19, 27, 41, 0.06), 0 18px 40px rgba(19, 27, 41, 0.10);
+  --shadow-modal: 0 24px 70px rgba(19, 27, 41, 0.30);
+  --container: 1200px;
+  --nav-h: 72px;
 }

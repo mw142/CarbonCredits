@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import Navbar, { dashboardPathFor } from '../components/Navbar';
+import AuthSide from '../components/AuthSide';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 
 export default function Login() {
   const [role, setRole] = useState('buyer');
@@ -10,8 +12,10 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { login } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
+  const roleNames = { buyer: t('Buyer'), seller: t('Seller'), admin: t('Admin') };
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -19,8 +23,7 @@ export default function Login() {
     setBusy(true);
     try {
       const user = await login(email, password, role);
-      const dest = location.state?.from || (user.role === 'admin' ? '/admin' : user.role === 'seller' ? '/seller' : '/buyer');
-      navigate(dest, { replace: true });
+      navigate(location.state?.from || dashboardPathFor(user), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -28,57 +31,44 @@ export default function Login() {
     }
   }
 
-  function fillDemo(demoRole) {
-    setRole(demoRole);
-    if (demoRole === 'buyer') { setEmail('buyer1@carboncredit.local'); setPassword('Buyer123!'); }
-    if (demoRole === 'seller') { setEmail('seller1@carboncredit.local'); setPassword('Seller123!'); }
-    if (demoRole === 'admin') { setEmail('admin@carboncredit.local'); setPassword('Admin123!'); }
-  }
-
   return (
     <>
       <Navbar />
       <div className="auth-shell">
-        <div className="card auth-card">
-          <div className="eyebrow">Registry sign-in</div>
-          <h2>Log in to Irongate IT</h2>
-          <p className="text-soft" style={{ marginBottom: 22 }}>Access your buyer or seller account.</p>
+        <AuthSide />
+        <div className="auth-main">
+          <div className="card auth-card">
+            <div className="eyebrow">{t('Welcome back')}</div>
+            <h2>{t('Log in to renewCo.')}</h2>
+            <p className="text-soft" style={{ marginBottom: 22 }}>{t('Access your buyer, seller or administrator workspace.')}</p>
 
-          <div className="role-toggle">
-            {['buyer', 'seller', 'admin'].map((r) => (
-              <button key={r} type="button" className={role === r ? 'active' : ''} onClick={() => setRole(r)}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
+            <div className="role-toggle">
+              {['buyer', 'seller', 'admin'].map((r) => (
+                <button key={r} type="button" className={role === r ? 'active' : ''} onClick={() => setRole(r)}>{roleNames[r]}</button>
+              ))}
+            </div>
+
+            {error ? <div className="form-error">{error}</div> : null}
+
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label htmlFor="email">{t('Email address')}</label>
+                <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="password">{t('Password')}</label>
+                <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <button className="btn btn-primary btn-block" type="submit" disabled={busy}>
+                {busy ? t('Signing in…') : t('Log in as {role}', { role: roleNames[role].toLowerCase() })}
               </button>
-            ))}
+            </form>
+
+            <hr className="hairline" />
+            <p className="text-soft" style={{ fontSize: 14, margin: 0 }}>
+              {t('New to renewCo.?')} <Link to="/register" style={{ color: 'var(--mint-ink)', fontWeight: 700 }}>{t('Create an account')}</Link>
+            </p>
           </div>
-
-          {error ? <div className="form-error">{error}</div> : null}
-
-          <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label htmlFor="email">Email address</label>
-              <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            <button className="btn btn-verified btn-block" type="submit" disabled={busy}>
-              {busy ? 'Signing in…' : `Log in as ${role}`}
-            </button>
-          </form>
-
-          <hr className="hairline" />
-          <div className="field-hint" style={{ marginBottom: 8 }}>Prototype demo accounts — click to fill:</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline btn-sm" type="button" onClick={() => fillDemo('buyer')}>Demo buyer</button>
-            <button className="btn btn-outline btn-sm" type="button" onClick={() => fillDemo('seller')}>Demo seller</button>
-            <button className="btn btn-outline btn-sm" type="button" onClick={() => fillDemo('admin')}>Demo admin</button>
-          </div>
-
-          <p className="text-soft" style={{ marginTop: 20, fontSize: 13.5 }}>
-            New to Irongate IT? <Link to="/register" style={{ color: 'var(--verified)', fontWeight: 600 }}>Create an account</Link>
-          </p>
         </div>
       </div>
     </>

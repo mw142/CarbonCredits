@@ -1,13 +1,15 @@
 {
-  "name": "carbon-credit-marketplace-backend",
-  "version": "1.0.0",
-  "description": "Local prototype API + SQLite database for the Carbon Credit Marketplace",
+  "name": "renewco-platform-backend",
+  "version": "2.0.0",
+  "description": "renewCo. carbon marketplace API and SQLite database (powered by IrongateIT)",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node --experimental-sqlite server.js",
     "dev": "node --experimental-sqlite --watch server.js",
-    "seed": "node --experimental-sqlite db/seed.js"
+    "check": "node --experimental-sqlite check-schema.js",
+    "check:csv": "node check-project-csv.js",
+    "create-admin": "node --experimental-sqlite create-admin.js"
   },
   "engines": {
     "node": ">=22.5.0"
@@ -15,7 +17,9 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
     "express": "^4.19.2",
+    "groq-sdk": "^1.6.0",
     "jsonwebtoken": "^9.0.2"
   }
 }

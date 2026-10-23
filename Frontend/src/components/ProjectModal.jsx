@@ -1,133 +1,118 @@
-import { useState } from 'react';
-import VerifiedStamp from './VerifiedStamp';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import StatusBadge from './StatusBadge';
-import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 
-export default function ProjectModal({ project, onClose, onPurchased, onToggleSave, saved }) {
+function Src({ children }) {
+  return <span className="source-tag">{children}</span>;
+}
+
+export default function ProjectModal({ project, onClose }) {
   const { user, token } = useAuth();
-  const [credits, setCredits] = useState(50);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { t, num, money, date } = useI18n();
+  const [message, setMessage] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [status, setStatus] = useState(null);
+  const listing = project?.listing;
+  const imageUrl = listing?.images?.[0]?.url;
 
-  if (!project) return null;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-  async function handlePurchase(e) {
+  async function submitEnquiry(e) {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-    setBusy(true);
+    setStatus(null);
     try {
-      const result = await api.post('/buyer/purchase', { project_id: project.id, credits: Number(credits) }, token);
-      setSuccess(`Purchased ${result.credits_purchased} credits for $${result.total_price.toFixed(2)}. ${result.message}`);
-      onPurchased?.(result.project);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await api.post('/contact-requests', {
+        listing_id: listing.id,
+        requested_quantity: quantity ? Number(quantity) : null,
+        message: message || null,
+      }, token);
+      setStatus({ ok: true, text: t('Enquiry sent to the project representative.') });
+      setMessage('');
+      setQuantity('');
+    } catch (error) { setStatus({ ok: false, text: error.message }); }
   }
 
+  if (!project) return null;
+  const d = project.project_details;
+  const state = project.locations?.find((l) => l.state_or_territory)?.state_or_territory;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
-        <div className="modal-hero">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={project.name} onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label={t('Close')}>×</button>
+        <div className="modal-hero" style={imageUrl ? { backgroundImage: `linear-gradient(rgba(19,27,41,.55), rgba(19,27,41,.82)), url("${imageUrl}")` } : undefined}>
           <div>
-            <div className="eyebrow" style={{ color: 'var(--brass)' }}>{project.project_type} · {project.location}</div>
-            <h2 style={{ marginBottom: 6 }}>{project.name}</h2>
-            <div style={{ color: 'var(--text-on-ink-soft)', fontSize: 13.5 }}>
-              {project.seller?.organisation_name || project.seller?.name}
-            </div>
+            <div className="eyebrow">{project.project_reference} · {t(project.project_type || 'Project')}</div>
+            <h2>{listing?.title || project.name}</h2>
+            <div style={{ color: 'var(--text-on-ink-soft)', fontSize: 13.5 }}>{project.project_proponent || t('Proponent not listed')}</div>
           </div>
-          {project.is_verified ? <VerifiedStamp size={64} tone="brass" /> : null}
+          {listing ? <StatusBadge status="verified" label={t('Verified representative')} /> : null}
         </div>
-
         <div className="modal-body">
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-            <StatusBadge status={project.review_status} />
-            {project.accu_category ? <span className="chip mono">{project.accu_category}</span> : null}
-            {project.vintage ? <span className="chip mono">Vintage {project.vintage}</span> : null}
+          <div className="section-title" style={{ marginTop: 0 }}><span>{t('Official project information')} <Src>CER</Src></span></div>
+          <div className="kv-grid">
+            <div><div className="k">{t('Status')}</div><div className="v">{t(project.project_status === 'revoked' ? 'Revoked' : 'Registered')}</div></div>
+            <div><div className="k">{t('Location')}</div><div className="v">{state ? t(state) : '—'}{d?.location_postcode ? ` ${d.location_postcode}` : ''}</div></div>
+            <div><div className="k">{t('Registered')}</div><div className="v">{date(project.project_registered_at)}</div></div>
+            <div><div className="k">{t('Crediting period')}</div><div className="v">{date(project.crediting_period_start)} – {date(project.crediting_period_end)}</div></div>
+            <div><div className="k">{t('ACCUs issued')}</div><div className="v mono">{num(project.total_accus_issued)}</div></div>
+            <div><div className="k">{t('ACCUs relinquished')}</div><div className="v mono">{num(project.total_accus_relinquished)}</div></div>
           </div>
+          <div className="section-title">{t('Description')}</div>
+          <p>{project.description || t('No project description has been uploaded.')}</p>
+          <div className="section-title">{t('Method')}</div>
+          <p className="small">{project.methodology || '—'}</p>
+          {d?.project_activities ? <><div className="section-title">{t('Project activities')}</div><p className="small">{d.project_activities}</p></> : null}
+          {project.project_links?.length ? <div className="doc-row">{project.project_links.map((link) => <a key={`${link.link_type}-${link.url}`} href={link.url} target="_blank" rel="noreferrer">{t(link.link_type.replaceAll('_', ' '))} ↗</a>)}</div> : null}
 
-          <p>{project.description}</p>
-
-          <div className="field-row">
-            <div>
-              <div className="section-title">Methodology</div>
-              <p style={{ fontSize: 13.5 }}>{project.methodology || '—'}</p>
-            </div>
-            <div>
-              <div className="section-title">Estimated emission reductions</div>
-              <p className="mono" style={{ fontSize: 13.5 }}>
-                {project.estimated_emission_reductions ? `${project.estimated_emission_reductions.toLocaleString()} tCO₂-e` : '—'}
-              </p>
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div>
-              <div className="section-title">Price per credit</div>
-              <p className="price-figure" style={{ fontSize: 22 }}>${project.price_per_credit.toFixed(2)}</p>
-            </div>
-            <div>
-              <div className="section-title">Credits available</div>
-              <p className="mono" style={{ fontSize: 22 }}>{Math.round(project.available_credits).toLocaleString()}</p>
-            </div>
-          </div>
-
-          {project.documents?.length ? (
+          {listing ? (
             <>
-              <div className="section-title">Supporting evidence on file</div>
-              {project.documents.map((d) => (
-                <div className="doc-row" key={d.id}>
-                  <span aria-hidden="true">📄</span>
-                  <span>{d.file_name}</span>
-                  <span className="text-soft mono" style={{ marginLeft: 'auto', fontSize: 11.5 }}>{d.document_type}</span>
+              <hr className="hairline" />
+              <div className="section-title" style={{ marginTop: 0 }}><span>{t('Listing')} <Src>{t('Project representative')}</Src></span></div>
+              <p>{listing.description || t('The representative has not added a listing description.')}</p>
+              <p className="small text-soft">{t('Representative')}: <strong>{listing.seller.organisation_name || listing.seller.name}</strong></p>
+              {listing.availability ? (
+                <div className="kv-grid">
+                  <div><div className="k">{t('Available ACCUs')}</div><div className="v mono">{num(listing.availability.quantity_available)}</div></div>
+                  <div><div className="k">{t('Indicative price')}</div><div className="v price-figure">{listing.availability.indicative_price == null ? t('Not provided') : money(listing.availability.indicative_price)}</div></div>
+                  <div><div className="k">{t('Vintage / category')}</div><div className="v">{[listing.availability.vintage, listing.availability.category].filter(Boolean).join(' · ') || '—'}</div></div>
+                  <div><div className="k">{t('Confirmed by seller')}</div><div className="v">{date(listing.availability.seller_confirmed_at)}</div></div>
                 </div>
-              ))}
-            </>
-          ) : null}
-
-          <hr className="hairline" />
-
-          {error ? <div className="form-error">{error}</div> : null}
-          {success ? <div className="form-success">{success}</div> : null}
-
-          {user?.role === 'buyer' && project.is_listed ? (
-            <form onSubmit={handlePurchase}>
-              <div className="field-row" style={{ alignItems: 'end' }}>
-                <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor="credits">Credits to buy</label>
-                  <input
-                    id="credits" type="number" min="1" max={project.available_credits}
-                    value={credits} onChange={(e) => setCredits(e.target.value)}
-                  />
-                </div>
-                <div className="field" style={{ marginBottom: 0 }}>
-                  <label>Total</label>
-                  <div className="price-figure" style={{ padding: '10px 0' }}>
-                    ${(Number(credits || 0) * project.price_per_credit).toFixed(2)}
+              ) : <p className="form-note">{t('Availability requires reconfirmation.')}</p>}
+              {listing.accu_evidence?.length ? (
+                <>
+                  <div className="section-title"><span>{t('Verified ACCU evidence')} <Src>{t('Platform review')}</Src></span></div>
+                  {listing.accu_evidence.map((ev) => <div className="doc-row" key={ev.id}><StatusBadge status="verified" /> {ev.verified_quantity != null ? t('{n} ACCUs', { n: num(ev.verified_quantity) }) : t('Quantity not stated')} · {ev.vintage || '—'} · {ev.category || '—'}{ev.masked_reference ? ` · ${ev.masked_reference}` : ''} <span className="text-soft small">{date(ev.verified_at)}</span></div>)}
+                </>
+              ) : null}
+              {listing.images?.length ? <div className="image-strip">{listing.images.map((image) => <img key={image.id} src={image.url} alt={image.alt_text || image.caption || project.name} />)}</div> : null}
+              {user?.role === 'buyer' && listing.contact_available ? (
+                <form onSubmit={submitEnquiry} className="card panel" style={{ marginTop: 18, background: 'var(--paper)' }}>
+                  <div className="section-title" style={{ marginTop: 0 }}>{t('Contact the representative')}</div>
+                  <div className="field-row">
+                    <div className="field"><label htmlFor="quantity">{t('Requested quantity')}</label><input id="quantity" type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></div>
+                    <div className="field"><label htmlFor="message">{t('Message')}</label><input id="message" value={message} onChange={(e) => setMessage(e.target.value)} /></div>
                   </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-                <button className="btn btn-verified" type="submit" disabled={busy}>
-                  {busy ? 'Processing…' : 'Buy credits'}
-                </button>
-                <button type="button" className="btn btn-outline" onClick={() => onToggleSave?.(project)}>
-                  {saved ? 'Remove from saved' : 'Save for later'}
-                </button>
-              </div>
-              <p className="field-hint" style={{ marginTop: 10 }}>
-                Simulated transaction for this prototype — no real payment is processed. In production, purchases,
-                payments and ACCU transfers happen outside the platform after the buyer and seller connect.
-              </p>
-            </form>
-          ) : !user ? (
-            <p className="text-soft">Log in as a buyer to purchase credits from this listing.</p>
-          ) : null}
+                  <button className="btn btn-primary" type="submit">{t('Send enquiry')}</button>
+                  {status ? <div className={status.ok ? 'form-success' : 'form-error'} style={{ marginTop: 12, marginBottom: 0 }}>{status.text}</div> : null}
+                </form>
+              ) : null}
+              {!user && listing.contact_available ? <p className="form-note" style={{ marginTop: 14 }}><Link to="/register?role=buyer" style={{ fontWeight: 700 }}>{t('Create a buyer account')}</Link> {t('to contact this representative.')}</p> : null}
+            </>
+          ) : (
+            <>
+              <hr className="hairline" />
+              <p className="form-note">{t('This project has not been claimed by a verified project representative.')}</p>
+              {user?.role === 'seller' ? <Link className="btn btn-primary" to={`/seller/claims/new?project=${project.id}`} onClick={onClose}>{t('Request to claim this project')}</Link> : null}
+            </>
+          )}
+          <p className="disclaimer">{t('Official project information is sourced from public Clean Energy Regulator data. Listing descriptions, images, pricing and availability are supplied by the verified project representative. Platform verification is based on documents submitted by users and does not replace confirmation through the official CER registry. Purchases, payments and ACCU transfers occur outside this platform.')}</p>
         </div>
       </div>
     </div>

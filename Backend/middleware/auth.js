@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'carbon-credit-marketplace-local-prototype-secret';
+const DEV_SECRET = 'carbon-credits-local-development-secret-change-me';
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_SECRET)) {
+  throw new Error('JWT_SECRET must be set to a long random value in production (Backend/.env).');
+}
+const JWT_SECRET = process.env.JWT_SECRET || DEV_SECRET;
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -15,6 +19,19 @@ function requireAuth(req, res, next) {
   }
 }
 
+/** Attach req.user when a valid token is present; otherwise continue as guest. */
+function optionalAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return next();
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+  } catch {
+    // Ignore invalid/expired tokens for public chatbot access.
+  }
+  next();
+}
+
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -24,4 +41,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireAuth, requireRole, JWT_SECRET };
+module.exports = { requireAuth, optionalAuth, requireRole, JWT_SECRET };

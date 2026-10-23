@@ -1,154 +1,98 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import ProjectCard from '../components/ProjectCard';
 import ProjectModal from '../components/ProjectModal';
+import ExportButton from '../components/ExportButton';
 import { api } from '../api/client';
-import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
+import { PROJECT_TYPES, STATES } from '../constants';
+
+const PAGE = 24;
 
 export default function Marketplace() {
-  const { user, token } = useAuth();
+  const { t, num } = useI18n();
   const [projects, setProjects] = useState([]);
-  const [types, setTypes] = useState([]);
+  const [filters, setFilters] = useState({ search: '', type: '', state: '', status: '' });
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [shown, setShown] = useState(PAGE);
+  const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
-  const [savedIds, setSavedIds] = useState(new Set());
 
-  const [filters, setFilters] = useState({ search: '', type: '', state: '', verifiedOnly: false, sort: 'newest' });
+  const query = useMemo(() => new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString(), [filters]);
 
-  const loadProjects = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    setError('');
-    try {
-      const params = new URLSearchParams();
-      if (filters.search) params.set('search', filters.search);
-      if (filters.type) params.set('type', filters.type);
-      if (filters.state) params.set('state', filters.state);
-      if (filters.verifiedOnly) params.set('verifiedOnly', 'true');
-      if (filters.sort) params.set('sort', filters.sort);
-      const data = await api.get(`/projects?${params.toString()}`);
-      setProjects(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+    const timer = setTimeout(async () => {
+      try {
+        const list = await api.get(`/projects?${query}`);
+        if (!cancelled) { setProjects(list); setError(''); setShown(PAGE); }
+      } catch (err) { if (!cancelled) setError(err.message); }
+      finally { if (!cancelled) setLoading(false); }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query]);
 
-  useEffect(() => { loadProjects(); }, [loadProjects]);
+  const visible = useMemo(() => {
+    const list = verifiedOnly ? projects.filter((p) => p.listing) : projects;
+    // Verified listings first, then by name.
+    return [...list].sort((a, b) => Number(Boolean(b.listing)) - Number(Boolean(a.listing)));
+  }, [projects, verifiedOnly]);
 
-  useEffect(() => {
-    api.get('/project-types').then(setTypes).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (user?.role === 'buyer' && token) {
-      api.get('/buyer/dashboard', token)
-        .then((d) => setSavedIds(new Set(d.saved_projects.map((p) => p.id))))
-        .catch(() => {});
-    }
-  }, [user, token]);
-
-  const locations = useMemo(() => {
-    const set = new Set(projects.map((p) => p.location.split(',').pop().trim()));
-    return Array.from(set);
-  }, [projects]);
-
-  async function toggleSave(project) {
-    if (!user || user.role !== 'buyer') return;
-    const isSaved = savedIds.has(project.id);
-    try {
-      if (isSaved) {
-        await api.del(`/buyer/save/${project.id}`, token);
-        setSavedIds((s) => { const next = new Set(s); next.delete(project.id); return next; });
-      } else {
-        await api.post(`/buyer/save/${project.id}`, {}, token);
-        setSavedIds((s) => new Set(s).add(project.id));
-      }
-    } catch { /* no-op for prototype */ }
+  async function openProject(project) {
+    try { setSelected(await api.get(`/projects/${project.id}`)); }
+    catch (err) { setError(err.message); }
   }
 
-  async function handleOpen(project) {
-    setSelected(project); // show immediately, then enrich with documents
-    try {
-      const full = await api.get(`/projects/${project.id}`, token);
-      setSelected(full);
-    } catch { /* keep the summary version if detail fetch fails */ }
-  }
-
-  function handlePurchased(updatedProject) {
-    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
-    setSelected(updatedProject);
-  }
+  const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
 
   return (
     <>
       <Navbar />
-      <div className="container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+      <div className="container" style={{ paddingTop: 40, paddingBottom: 80 }}>
         <div className="page-header">
           <div>
-            <div className="eyebrow">Carbon credit marketplace</div>
-            <h1>Verified ACCU projects</h1>
-            <p className="text-soft" style={{ maxWidth: 560 }}>
-              Browse project listings with ACCU-verified evidence. Filter by type, location, price and
-              verification status to find credits that match your offset goals.
-            </p>
+            <div className="eyebrow">{t('Marketplace')}</div>
+            <h1>{t('Projects and verified listings')}</h1>
+            <p className="text-soft">{t('Browse every project on the Clean Energy Regulator register. Verified listings show seller-supplied availability and pricing, kept separate from official CER data.')}</p>
           </div>
+          <ExportButton path={`/export/projects${query ? `?${query}` : ''}`} label={t('Export results')} />
         </div>
-
         <div className="filter-bar">
-          <input
-            type="text" placeholder="Search projects…" value={filters.search}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          />
-          <select value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
-            <option value="">All project types</option>
-            {types.map((t) => <option key={t} value={t}>{t}</option>)}
+          <input className="grow" type="search" placeholder={t('Search project, proponent or methodology')} value={filters.search} onChange={set('search')} aria-label={t('Search')} />
+          <select value={filters.type} onChange={set('type')} aria-label={t('Project type')}>
+            <option value="">{t('All project types')}</option>
+            {PROJECT_TYPES.map((v) => <option key={v} value={v}>{t(v)}</option>)}
           </select>
-          <select value={filters.state} onChange={(e) => setFilters((f) => ({ ...f, state: e.target.value }))}>
-            <option value="">All locations</option>
-            {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+          <select value={filters.state} onChange={set('state')} aria-label={t('State or territory')}>
+            <option value="">{t('All states')}</option>
+            {STATES.map((v) => <option key={v} value={v}>{t(v)}</option>)}
           </select>
-          <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value }))}>
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price: low to high</option>
-            <option value="price_desc">Price: high to low</option>
-            <option value="credits_desc">Most credits available</option>
+          <select value={filters.status} onChange={set('status')} aria-label={t('Project status')}>
+            <option value="">{t('Any status')}</option>
+            <option value="registered">{t('Registered')}</option>
+            <option value="revoked">{t('Revoked')}</option>
           </select>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5 }}>
-            <input
-              type="checkbox" checked={filters.verifiedOnly}
-              onChange={(e) => setFilters((f) => ({ ...f, verifiedOnly: e.target.checked }))}
-              style={{ width: 'auto' }}
-            />
-            Verified only
-          </label>
+          <label className="check"><input type="checkbox" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} /> {t('Verified listings only')}</label>
         </div>
-
         {error ? <div className="form-error">{error}</div> : null}
-
-        {loading ? (
-          <div className="loading-row"><span className="spinner" /> Loading listings…</div>
-        ) : projects.length === 0 ? (
-          <div className="empty-state">No listings match those filters yet.</div>
-        ) : (
-          <div className="project-grid">
-            {projects.map((p) => (
-              <ProjectCard key={p.id} project={p} onOpen={handleOpen} />
-            ))}
-          </div>
-        )}
+        {loading ? <div className="loading-row"><span className="spinner" /> {t('Loading projects…')}</div> : visible.length ? (
+          <>
+            <p className="small text-soft">{t('{n} projects', { n: num(visible.length) })}</p>
+            <div className="project-grid">{visible.slice(0, shown).map((project) => <ProjectCard key={project.id} project={project} onOpen={openProject} />)}</div>
+            {shown < visible.length ? (
+              <div className="pager">
+                <span>{t('Showing {a} of {b}', { a: num(Math.min(shown, visible.length)), b: num(visible.length) })}</span>
+                <button className="btn btn-outline btn-sm" onClick={() => setShown((s) => s + PAGE * 2)}>{t('Show more')}</button>
+              </div>
+            ) : null}
+          </>
+        ) : <div className="empty-state">{t('No projects match the current filters.')}</div>}
       </div>
-
-      {selected ? (
-        <ProjectModal
-          project={selected}
-          onClose={() => setSelected(null)}
-          onPurchased={handlePurchased}
-          onToggleSave={toggleSave}
-          saved={savedIds.has(selected.id)}
-        />
-      ) : null}
+      {selected ? <ProjectModal project={selected} onClose={() => setSelected(null)} /> : null}
+      <Footer />
     </>
   );
 }

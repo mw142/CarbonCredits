@@ -1,0 +1,19 @@
+admin@mail.com
+admin123
+
+seller@mail.com
+seller123
+
+buyer@mail.com
+buyer123
+
+cd /Users/mike/Documents/CarbonCredits/Backend
+npm install
+npm run create-admin -- "Admin" admin@mail.com admin123
+npm run dev
+
+cd /Users/mike/Documents/CarbonCredits/Frontend
+npm install
+npm run dev
+
+http://localhost:5173

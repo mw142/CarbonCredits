@@ -1,4 +1,27 @@
 PRAGMA foreign_keys = ON;
+/*
+Mike W - CarbonCredit Project CSIT321
+
+DATABASE WORKFLOW OVERVIEW:
+Administrators upload project CSV files into project tables.
+Users discover carbon projects and verified sellers can claim projects,
+create listings, upload evidence, and provide additional project information.
+The database separates administrator-uploaded project data, seller data, and platform verification data to avoid fraudulent listings
+
+Main database workflow:
+- projects: stores project information loaded from administrator CSV files.
+- project_locations: stores project mapping information, coordinates, and location accuracy.
+- user_buyer, user_seller and user_admin: store different user roles.
+- project_claims: manages seller requests to represent a project.
+- project_claim_documents: stores private evidence submitted for verification.
+- verification_audit_log: records administrator verification actions.
+- project_listings: stores seller-created project listings linked to approved projects.
+- project_images: stores seller-uploaded project images and media.
+- accu_evidence: stores uploaded ACCU certificates and supporting evidence for review.
+- listing_availability: stores seller-provided ACCU availability, vintage, and category details.
+- project_contact_requests: allows buyers to contact verified sellers.
+*/
+
 
 -- ============================================================
 -- USERS: Buyer, Seller, Admin
@@ -68,13 +91,13 @@ CREATE TABLE user_admin (
 );
 
 -- ============================================================
--- PUBLIC CER PROJECTS AND IMPORTS
+-- PROJECTS AND ADMIN CSV DATA
 -- ============================================================
 
--- Official public project facts imported from CER. Seller data lives in project_listings.
+-- Project data loaded by administrators. Seller data lives in project_listings.
 CREATE TABLE projects (
     id INTEGER PRIMARY KEY,
-    cer_project_id TEXT NOT NULL UNIQUE,
+    project_reference TEXT NOT NULL UNIQUE,
     project_type TEXT,
     name TEXT NOT NULL,
     project_proponent TEXT,
@@ -87,31 +110,70 @@ CREATE TABLE projects (
     total_accus_issued INTEGER NOT NULL DEFAULT 0 CHECK (total_accus_issued >= 0),
     total_accus_relinquished INTEGER NOT NULL DEFAULT 0
         CHECK (total_accus_relinquished >= 0),
-    source_dataset TEXT NOT NULL DEFAULT 'CER ACCU Scheme project register',
-    source_record_url TEXT
-        CHECK (source_record_url IS NULL OR source_record_url LIKE 'https://cer.gov.au/%'),
-    source_last_updated_at TEXT,
-    source_record_hash TEXT,
-    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (total_accus_relinquished <= total_accus_issued)
 );
 
--- Records each public CER dataset import and its result.
-CREATE TABLE cer_import_runs (
+-- CSV fields that are not needed in the core project search row.
+CREATE TABLE project_details (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    agent TEXT,
+    significantly_involved_persons TEXT,
+    method_url TEXT,
+    method_type TEXT,
+    estimation_approach TEXT,
+    project_activities TEXT,
+    project_suppressors TEXT,
+    location_postcode TEXT,
+    project_area TEXT,
+    supplementary_information TEXT,
+    model_start_dates TEXT,
+    regional_plan_consistency TEXT,
+    joint_implementation TEXT,
+    carbon_maintenance_obligation TEXT,
+    regulatory_approvals_condition TEXT,
+    relevant_interest_holders_consent TEXT,
+    nominated_permanence_period TEXT,
+    permanence_start_date TEXT,
+    permanence_end_date TEXT,
+    contracted_on TEXT,
+    contract_id TEXT,
+    kaccu_recipient_name TEXT,
+    nkaccu_recipient_name TEXT,
+    enforceable_undertakings TEXT,
+    notes TEXT,
+    project_revoked INTEGER NOT NULL DEFAULT 0 CHECK (project_revoked IN (0, 1)),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Unit totals are kept by category instead of being collapsed into one number.
+CREATE TABLE project_unit_totals (
     id INTEGER PRIMARY KEY,
-    source_name TEXT NOT NULL,
-    source_file_url TEXT
-        CHECK (source_file_url IS NULL OR source_file_url LIKE 'https://cer.gov.au/%'),
-    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completed_at TEXT,
-    status TEXT NOT NULL
-        CHECK (status IN ('running', 'completed', 'completed_with_errors', 'failed')),
-    records_received INTEGER NOT NULL DEFAULT 0 CHECK (records_received >= 0),
-    records_inserted INTEGER NOT NULL DEFAULT 0 CHECK (records_inserted >= 0),
-    records_updated INTEGER NOT NULL DEFAULT 0 CHECK (records_updated >= 0),
-    records_failed INTEGER NOT NULL DEFAULT 0 CHECK (records_failed >= 0),
-    error_message TEXT
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    unit_type TEXT NOT NULL CHECK (unit_type IN ('ACCU', 'KACCU', 'NKACCU')),
+    total_units_issued INTEGER NOT NULL DEFAULT 0 CHECK (total_units_issued >= 0),
+    total_units_relinquished INTEGER NOT NULL DEFAULT 0 CHECK (total_units_relinquished >= 0),
+    recipient_name TEXT,
+    UNIQUE (project_id, unit_type)
+);
+
+-- Financial-year columns from the CSV become rows, so new years need no schema change.
+CREATE TABLE project_unit_issuances (
+    id INTEGER PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    unit_type TEXT NOT NULL CHECK (unit_type IN ('KACCU', 'NKACCU')),
+    financial_year TEXT NOT NULL,
+    units_issued INTEGER NOT NULL DEFAULT 0 CHECK (units_issued >= 0),
+    UNIQUE (project_id, unit_type, financial_year)
+);
+
+-- URLs are separate because a project can have several project documents.
+CREATE TABLE project_links (
+    id INTEGER PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    link_type TEXT NOT NULL CHECK (link_type IN ('method', 'project_mapping', 'carbon_estimation_area_mapping', 'enforceable_undertaking')),
+    url TEXT NOT NULL,
+    UNIQUE (project_id, link_type, url)
 );
 
 -- Current project locations with source and accuracy recorded explicitly.
@@ -128,7 +190,7 @@ CREATE TABLE project_locations (
     geometry_geojson TEXT
         CHECK (geometry_geojson IS NULL OR json_valid(geometry_geojson)),
     location_source TEXT NOT NULL
-        CHECK (location_source IN ('cer', 'seller', 'geocoded', 'admin')),
+        CHECK (location_source IN ('seller', 'geocoded', 'admin')),
     seller_permission_to_display INTEGER NOT NULL DEFAULT 0
         CHECK (seller_permission_to_display IN (0, 1)),
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -138,7 +200,7 @@ CREATE TABLE project_locations (
 -- PROJECT CLAIMS AND LISTINGS
 -- ============================================================
 
--- A seller's request to represent an existing public CER project.
+-- A seller's request to represent a project.
 CREATE TABLE project_claims (
     id INTEGER PRIMARY KEY,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -176,7 +238,7 @@ CREATE TABLE project_claim_documents (
     uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seller-managed presentation of an official project after claim approval.
+-- Seller presentation of an official project after claim approval.
 CREATE TABLE project_listings (
     id INTEGER PRIMARY KEY,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -236,7 +298,7 @@ CREATE TABLE accu_evidence (
     uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seller-declared availability; it expires unless reconfirmed.
+-- Seller availability it expires unless reconfirmed.
 CREATE TABLE listing_availability (
     id INTEGER PRIMARY KEY,
     listing_id INTEGER NOT NULL REFERENCES project_listings(id) ON DELETE CASCADE,

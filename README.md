@@ -1,6 +1,44 @@
+# renewCo. — Carbon & Environmental Markets Platform
+
+Australian carbon credit (ACCU) marketplace and market-intelligence platform built for **renewCo.** (renew-co.com.au) — **powered by IrongateIT**.
+
+## What's new in this release
+
+| Feature | Where | Notes |
+|---|---|---|
+| **renewCo. rebrand** | Whole site | Design modelled on renew-co.com.au (numbered sections, monochrome + logo mint). Logo rebuilt as a crisp vector (`Frontend/src/assets/brand/*.svg`) with PNG exports up to 2048 px in `Frontend/public/brand/`. "Powered by IrongateIT" in footer, sidebar, sign-in and reports. |
+| **Emissions tracking** | Buyer → Emissions tracking | Scope 1/2/3 entries with NGA-based factor presets (editable), CSV bulk import, ACCU retirements (registry refs stored masked), annual goal and net position. |
+| **Buyer introductions** | `/buyers` (public), Buyer → Buyer introductions, Admin → Introductions & enquiries | Buyers submit a brief (volume, budget, types, states, vintage, timeframe). Listings with live availability are scored and explained; buyer or admin can make the introduction, which opens a normal enquiry for the seller. |
+| **Automated reporting** | Reports & exports (all roles) | Weekly / monthly / quarterly schedules run by a built-in scheduler; on-demand reports for any period; print to PDF; CSV/JSON export. |
+| **Data export** | Export buttons throughout, `/api/export/*` | CSV (Excel-safe, UTF-8 BOM, formula-injection safe) or JSON. Role-scoped. |
+| **Multi-language** | Language switcher in the header | English, 简体中文, 日本語, Tiếng Việt. The AI assistant replies in the selected language. Add a language in `Frontend/src/i18n/locales/`. |
+| **Real-time market data** | `/market`, ticker on the home page | Server-Sent Events stream (`/api/market/stream`) pushes a fresh snapshot whenever imports, availability, prices or enquiries change. |
+| **Project CSV API + scheduled pull** | Admin → Data & integrations, `/api/v1/*` | API keys (SHA-256 hashed, scoped). `POST /api/v1/projects/import` accepts the CER register CSV as `text/csv`, base64 JSON, or `{url}`. Optional automatic pull from a configured URL. Every import is logged (`import_runs`) and unchanged projects are skipped. |
+| **Groq chatbot** | Floating "Ask renewCo." button | Configure `GROQ_API_KEY` and `GROQ_MODEL` in `Backend/.env` (see `.env.example`). |
+
+New database tables live in `Database/features.sql`. They are created automatically on start-up and existing local databases are upgraded in place — no reset needed.
+
+### Integration API quick start
+
+```bash
+# Create a key in Admin → Data & integrations, then:
+curl -X POST http://localhost:4000/api/v1/projects/import \
+  -H "X-API-Key: rc_live_…" -H "Content-Type: text/csv" \
+  --data-binary @Documents/accu-scheme-project-register-0.csv
+
+curl -X POST http://localhost:4000/api/v1/market/prices \
+  -H "X-API-Key: rc_live_…" -H "Content-Type: application/json" \
+  -d '[{"instrument":"Generic ACCU","price":35.10,"price_date":"2026-10-14","source":"Broker"}]'
+
+curl http://localhost:4000/api/v1            # endpoint list
+curl http://localhost:4000/api/v1/market/summary -H "X-API-Key: rc_live_…"
+```
+
+---
+
 ## Core System Flow
 ### 1. **Backend / Database** Import public CER project information
-The system regularly imports publicly available project information from the Clean Energy Regulator (CER). This may be collected from public datasets, downloadable register files, or other approved public sources.
+An administrator downloads the current publicly available project register CSV from the Clean Energy Regulator (CER) and uploads it through the admin workspace. The system does not automatically download the file.
 The imported information may include:
 - CER project ID
 - Project name
@@ -426,4 +464,3 @@ A suitable disclaimer is:
 23. **Backend / Database** CER updates change only official CER fields.
 24. **Backend / Database** Seller-managed information remains separate and is not overwritten.
 25. **Frontend / Backend / Database** All information is labelled as CER-sourced, seller-provided, or platform-verified.
-

@@ -1,129 +1,80 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import StatCard from '../components/StatCard';
-import ProjectCard from '../components/ProjectCard';
-import ProjectModal from '../components/ProjectModal';
+import StatusBadge from '../components/StatusBadge';
+import ExportButton from '../components/ExportButton';
+import Icon from '../components/Icons';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 
 export default function BuyerDashboard() {
-  const { user, token } = useAuth();
+  const { token, user } = useAuth();
+  const { t, num, date } = useI18n();
   const [data, setData] = useState(null);
+  const [requests, setRequests] = useState([]);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      const d = await api.get('/buyer/dashboard', token);
-      setData(d);
-    } catch (err) {
-      setError(err.message);
-    }
+  useEffect(() => {
+    Promise.all([api.get('/buyer/dashboard', token), api.get('/buyer/contact-requests', token)])
+      .then(([dashboard, contactRequests]) => { setData(dashboard); setRequests(contactRequests); })
+      .catch((err) => setError(err.message));
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
-
-  async function handleOpen(project) {
-    setSelected(project);
-    try {
-      const full = await api.get(`/projects/${project.id}`, token);
-      setSelected(full);
-    } catch { /* keep summary */ }
-  }
-
-  async function toggleSave(project) {
-    try {
-      const isSaved = data.saved_projects.some((p) => p.id === project.id);
-      if (isSaved) await api.del(`/buyer/save/${project.id}`, token);
-      else await api.post(`/buyer/save/${project.id}`, {}, token);
-      load();
-    } catch { /* no-op */ }
-  }
-
-  function handlePurchased() {
-    load();
-    setSelected(null);
-  }
-
   if (error) return <DashboardLayout><div className="form-error">{error}</div></DashboardLayout>;
-  if (!data) return <DashboardLayout><div className="loading-row"><span className="spinner" /> Loading dashboard…</div></DashboardLayout>;
-
-  const goalProgress = data.profile?.annual_offset_goal
-    ? Math.min(100, Math.round((data.total_credits_purchased / data.profile.annual_offset_goal) * 100))
-    : null;
+  if (!data) return <DashboardLayout><div className="loading-row"><span className="spinner" /> {t('Loading dashboard…')}</div></DashboardLayout>;
+  const e = data.emissions;
+  const actions = [
+    { to: '/buyer/introductions', icon: 'handshake', title: t('Request an introduction'), text: t('Share your requirements and get matched with verified supply.') },
+    { to: '/buyer/emissions', icon: 'leaf', title: t('Track emissions'), text: t('Record Scope 1–3 emissions and the ACCUs you retire.') },
+    { to: '/market', icon: 'market', title: t('Check the market'), text: t('Live prices, supply and demand.') },
+  ];
 
   return (
     <DashboardLayout>
       <div className="page-header">
         <div>
-          <div className="eyebrow">Buyer dashboard</div>
-          <h1>Welcome back, {user.name.split(' ')[0]}</h1>
+          <div className="eyebrow">{t('Buyer workspace')}</div>
+          <h1>{t('Welcome, {name}', { name: user.name.split(' ')[0] })}</h1>
+          <p className="text-soft">{t('Source verified carbon credits, track your emissions and keep your reporting up to date.')}</p>
         </div>
+        <Link to="/marketplace" className="btn btn-primary btn-arrow">{t('Browse projects')}</Link>
       </div>
-
       <div className="stat-grid">
-        <StatCard label="Carbon credit balance" value={Math.round(data.profile?.carbon_credit_balance || 0).toLocaleString()} sub="ACCUs held" />
-        <StatCard label="Total emissions" value={Math.round(data.profile?.total_emissions || 0).toLocaleString()} sub="tCO₂-e reported" />
-        <StatCard
-          label="Emissions offset"
-          value={Math.round(data.emissions_reduced).toLocaleString()}
-          sub={goalProgress != null ? `${goalProgress}% of annual goal` : 'No annual goal set'}
-        />
-        <StatCard label="Active projects" value={data.active_projects} sub={`${data.purchase_count} purchases total`} />
+        <StatCard label={t('Emissions {year}', { year: e.year })} value={num(e.total_tco2e, 1)} sub="t CO2-e" />
+        <StatCard label={t('ACCUs retired {year}', { year: e.year })} value={num(e.offsets_retired)} sub={e.goal_progress_pct != null ? t('{pct}% of goal', { pct: num(e.goal_progress_pct, 0) }) : t('No goal set')}>
+          {e.goal_progress_pct != null ? <div className="progress" style={{ marginTop: 10 }}><span style={{ width: `${Math.min(100, e.goal_progress_pct)}%` }} /></div> : null}
+        </StatCard>
+        <StatCard label={t('Enquiries')} value={num(data.contact_requests.total)} sub={t('{n} awaiting reply', { n: num(data.contact_requests.new) })} />
+        <StatCard label={t('Open introduction briefs')} value={num(data.introductions_open)} />
       </div>
-
-      <div className="section-title">Recent activity</div>
-      <div className="card" style={{ marginBottom: 30, overflowX: 'auto' }}>
-        {data.recent_activity.length === 0 ? (
-          <div className="empty-state">No purchases yet — browse the marketplace to get started.</div>
-        ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr><th>Project</th><th>Location</th><th>Credits</th><th>Price</th><th>Total</th><th>Date</th></tr>
-            </thead>
-            <tbody>
-              {data.recent_activity.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.project_name}</td>
-                  <td className="text-soft">{a.location}</td>
-                  <td className="mono">{a.credits_purchased.toLocaleString()}</td>
-                  <td className="mono">${a.price_per_credit.toFixed(2)}</td>
-                  <td className="mono">${a.total_price.toFixed(2)}</td>
-                  <td className="text-soft mono">{a.created_at.slice(0, 10)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="grid-3">
+        {actions.map((a) => (
+          <Link key={a.to} to={a.to} className="card start-card" style={{ minHeight: 0, padding: 22 }}>
+            <span className="icon"><Icon name={a.icon} size={20} /></span>
+            <h3 style={{ fontSize: 17 }}>{a.title}</h3>
+            <p className="small">{a.text}</p>
+          </Link>
+        ))}
       </div>
-
-      {data.saved_projects.length > 0 ? (
-        <>
-          <div className="section-title">Saved projects</div>
-          <div className="project-grid" style={{ marginBottom: 30 }}>
-            {data.saved_projects.map((p) => <ProjectCard key={p.id} project={p} onOpen={handleOpen} />)}
-          </div>
-        </>
-      ) : null}
-
-      {data.suggested_projects.length > 0 ? (
-        <>
-          <div className="section-title">Suggested for you</div>
-          <div className="project-grid">
-            {data.suggested_projects.map((p) => <ProjectCard key={p.id} project={p} onOpen={handleOpen} />)}
-          </div>
-        </>
-      ) : null}
-
-      {selected ? (
-        <ProjectModal
-          project={selected}
-          onClose={() => setSelected(null)}
-          onPurchased={handlePurchased}
-          onToggleSave={toggleSave}
-          saved={data.saved_projects.some((p) => p.id === selected.id)}
-        />
-      ) : null}
+      <div className="section-title"><span>{t('Your enquiries')}</span><ExportButton path="/export/buyer/enquiries" /></div>
+      <div className="card table-wrap">
+        <table className="ledger-table">
+          <thead><tr><th>{t('Project')}</th><th>{t('Representative')}</th><th className="num">{t('Quantity')}</th><th>{t('Message')}</th><th>{t('Status')}</th><th>{t('Date')}</th></tr></thead>
+          <tbody>{requests.map((request) => (
+            <tr key={request.id}>
+              <td>{request.project_name}<div className="small text-soft">{request.project_reference}</div></td>
+              <td>{request.organisation_name || request.seller_name}</td>
+              <td className="num">{request.requested_quantity ? num(request.requested_quantity) : '—'}</td>
+              <td className="small" style={{ maxWidth: 320, whiteSpace: 'pre-wrap' }}>{request.message || '—'}</td>
+              <td><StatusBadge status={request.status} /></td>
+              <td className="small">{date(request.created_at)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {!requests.length ? <div className="empty-state">{t('No enquiries yet. Browse the marketplace or request an introduction.')}</div> : null}
+      </div>
     </DashboardLayout>
   );
 }

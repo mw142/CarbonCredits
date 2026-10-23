@@ -1,0 +1,21 @@
+[Unit]
+Description=renewCo. carbon marketplace (powered by IrongateIT)
+After=network.target
+
+[Service]
+Type=simple
+User=renewco
+WorkingDirectory=/opt/renewco/Backend
+ExecStart=/usr/bin/node --experimental-sqlite server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/renewco /opt/renewco/Backend
+
+[Install]
+WantedBy=multi-user.target

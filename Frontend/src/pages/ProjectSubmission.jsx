@@ -1,166 +1,89 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
-import { api } from '../api/client';
+import { api, fileToDataUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 
-const initialForm = {
-  name: '', location: '', project_type: '', description: '', methodology: '',
-  estimated_emission_reductions: '', accu_category: '', vintage: '',
-  price_per_credit: '', total_credits: '',
-};
+const TYPES = [
+  ['owner', 'Project owner'],
+  ['proponent', 'Project proponent'],
+  ['authorised_representative', 'Authorised representative'],
+  ['project_manager', 'Project manager'],
+  ['contributor', 'Project contributor'],
+];
+const DOC_TYPES = [
+  ['ownership_evidence', 'Ownership evidence'],
+  ['authority_document', 'Authority to represent'],
+  ['project_agreement', 'Project agreement'],
+  ['registry_export', 'Registry export'],
+  ['other', 'Other'],
+];
 
 export default function ProjectSubmission() {
   const { token } = useAuth();
+  const { t } = useI18n();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [types, setTypes] = useState([]);
-  const [form, setForm] = useState(initialForm);
-  const [docName, setDocName] = useState('');
+  const [project, setProject] = useState(null);
+  const [relationship, setRelationship] = useState('authorised_representative');
+  const [docType, setDocType] = useState('authority_document');
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api.get('/project-types').then(setTypes).catch(() => {}); }, []);
+  useEffect(() => {
+    if (params.get('project')) api.get(`/projects/${params.get('project')}`).then(setProject).catch(() => {});
+  }, [params]);
 
-  function update(field, value) { setForm((f) => ({ ...f, [field]: value })); }
-
-  function addDocument() {
-    if (!docName.trim()) return;
-    setDocuments((d) => [...d, { document_type: 'other', file_name: docName.trim() }]);
-    setDocName('');
+  async function addDocument(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error(t('Maximum 10 MB per file.'));
+      const file_data = await fileToDataUrl(file);
+      setDocuments((current) => [...current, { original_file_name: file.name, mime_type: file.type, file_size_bytes: file.size, file_data, document_type: docType }]);
+    } catch (err) { setError(err.message); }
+    event.target.value = '';
   }
 
-  function removeDocument(name) {
-    setDocuments((d) => d.filter((doc) => doc.file_name !== name));
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function submit(event) {
+    event.preventDefault();
     setError('');
     setBusy(true);
     try {
-      const payload = {
-        ...form,
-        estimated_emission_reductions: form.estimated_emission_reductions ? Number(form.estimated_emission_reductions) : null,
-        price_per_credit: Number(form.price_per_credit),
-        total_credits: Number(form.total_credits),
-        documents,
-      };
-      const created = await api.post('/projects', payload, token);
-      navigate('/seller', { state: { submitted: created.id } });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await api.post(`/projects/${params.get('project')}/claims`, { relationship_type: relationship, documents }, token);
+      navigate('/seller');
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
   }
 
   return (
     <DashboardLayout>
       <div className="page-header">
         <div>
-          <div className="eyebrow">Project submission</div>
-          <h1>Submit a new project</h1>
-          <p className="text-soft" style={{ maxWidth: 560 }}>
-            This information is used by an administrator to verify your project before it can be listed on
-            the marketplace. Once submitted, the project is not visible to buyers until it&rsquo;s approved
-            and you publish the listing.
-          </p>
+          <div className="eyebrow">{t('Project claim')}</div>
+          <h1>{t('Request permission to represent this project')}</h1>
+          <p className="text-soft">{t('Submit your relationship and supporting evidence. An administrator must approve the claim before you can publish a listing.')}</p>
         </div>
       </div>
-
+      {project ? <div className="card panel" style={{ maxWidth: 760, marginBottom: 16 }}><div className="eyebrow">{project.project_reference}</div><strong>{project.name}</strong><div className="small text-soft">{project.project_proponent}</div></div> : null}
       {error ? <div className="form-error">{error}</div> : null}
-
-      <form onSubmit={handleSubmit} className="card panel" style={{ maxWidth: 720 }}>
-        <div className="field">
-          <label htmlFor="name">Project name</label>
-          <input id="name" required value={form.name} onChange={(e) => update('name', e.target.value)} />
-        </div>
-
+      <form className="card panel" style={{ maxWidth: 760 }} onSubmit={submit}>
+        <div className="field"><label htmlFor="relationship">{t('Your relationship to the project')}</label><select id="relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)}>{TYPES.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></div>
         <div className="field-row">
-          <div className="field">
-            <label htmlFor="location">Location</label>
-            <input id="location" required placeholder="e.g. Riverina, New South Wales" value={form.location} onChange={(e) => update('location', e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="project_type">Project type</label>
-            <select id="project_type" required value={form.project_type} onChange={(e) => update('project_type', e.target.value)}>
-              <option value="" disabled>Select type</option>
-              {types.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+          <div className="field"><label htmlFor="doc-type">{t('Document type')}</label><select id="doc-type" value={docType} onChange={(e) => setDocType(e.target.value)}>{DOC_TYPES.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></div>
+          <div className="field"><label htmlFor="claim-documents">{t('Add a supporting document')}</label><input id="claim-documents" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={addDocument} /></div>
         </div>
-
-        <div className="field">
-          <label htmlFor="description">Project description</label>
-          <textarea id="description" rows={4} value={form.description} onChange={(e) => update('description', e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label htmlFor="methodology">Methodology</label>
-          <input id="methodology" placeholder="e.g. Human-Induced Regeneration" value={form.methodology} onChange={(e) => update('methodology', e.target.value)} />
-        </div>
-
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="eer">Estimated emission reductions (tCO₂-e)</label>
-            <input id="eer" type="number" min="0" value={form.estimated_emission_reductions} onChange={(e) => update('estimated_emission_reductions', e.target.value)} />
+        <p className="field-hint">{t('Files are stored privately and are only available to you and authorised administrators. Maximum 10 MB per file.')}</p>
+        {documents.map((document, index) => (
+          <div className="doc-row" key={`${document.original_file_name}-${index}`}>
+            <span className="chip">{t(DOC_TYPES.find(([v]) => v === document.document_type)?.[1] || '')}</span>
+            <span>{document.original_file_name}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDocuments((current) => current.filter((_, i) => i !== index))}>{t('Remove')}</button>
           </div>
-          <div className="field">
-            <label htmlFor="vintage">Vintage year</label>
-            <input id="vintage" placeholder="2026" value={form.vintage} onChange={(e) => update('vintage', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="category">ACCU category</label>
-            <select id="category" value={form.accu_category} onChange={(e) => update('accu_category', e.target.value)}>
-              <option value="">Not specified</option>
-              <option value="KACCU">Kyoto ACCU (KACCU)</option>
-              <option value="NKACCU">Non-Kyoto ACCU (NKACCU)</option>
-            </select>
-          </div>
-          <div />
-        </div>
-
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="price">Price per credit (AUD)</label>
-            <input id="price" type="number" min="0" step="0.01" required value={form.price_per_credit} onChange={(e) => update('price_per_credit', e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="total">Total credits to list</label>
-            <input id="total" type="number" min="1" required value={form.total_credits} onChange={(e) => update('total_credits', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="field">
-          <label>Supporting evidence (file names)</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              placeholder="e.g. accu_certificate_2026.pdf" value={docName}
-              onChange={(e) => setDocName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDocument(); } }}
-            />
-            <button type="button" className="btn btn-outline btn-sm" onClick={addDocument}>Add</button>
-          </div>
-          <p className="field-hint">
-            This prototype records evidence file names only — a production build would upload the actual
-            certificates and registry exports for an administrator to review privately.
-          </p>
-          {documents.map((d) => (
-            <div className="doc-row" key={d.file_name}>
-              <span aria-hidden="true">📄</span>
-              <span>{d.file_name}</span>
-              <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => removeDocument(d.file_name)}>Remove</button>
-            </div>
-          ))}
-        </div>
-
-        <button className="btn btn-verified" type="submit" disabled={busy} style={{ marginTop: 8 }}>
-          {busy ? 'Submitting…' : 'Submit for verification'}
-        </button>
+        ))}
+        <button className="btn btn-primary" style={{ marginTop: 14 }} disabled={busy}>{busy ? t('Submitting…') : t('Submit claim request')}</button>
       </form>
     </DashboardLayout>
   );

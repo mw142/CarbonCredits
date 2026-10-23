@@ -1,0 +1,71 @@
+# Run the renewCo. platform locally (powered by IrongateIT)
+
+## Requirements
+
+- Node.js 22.5 or later
+- npm
+
+## 1. Install dependencies
+
+From the project root:
+
+```bash
+cd Backend
+npm install
+cd ../Frontend
+npm install
+```
+
+## 2. Check the canonical schema
+
+```bash
+cd ../Backend
+npm run check
+npm run check:csv
+```
+
+The checks must report that `Database/schema.sql` (17 core tables) and `Database/features.sql` (12 feature tables) are valid, and the CSV parser handles quoted fields.
+
+## 2b. Configure the chatbot
+
+`Backend/.env` holds the Groq settings used by the "Ask renewCo." assistant:
+
+```
+GROQ_API_KEY=your-key
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+Copy `Backend/.env.example` if the file is missing. Never commit `.env` (it is in `.gitignore`).
+
+## 3. Create an administrator account
+
+This is intentionally not seeded. Create one explicitly:
+
+```bash
+npm run create-admin -- "Registry Administrator" admin@example.com choose-a-password
+```
+
+Use a real local password with at least eight characters. Do not commit it.
+
+## 4. Start the backend
+
+```bash
+npm run dev
+```
+
+The API runs at `http://localhost:4000`. Check it with:
+
+```bash
+curl http://localhost:4000/api/health
+```
+
+## 5. Start the frontend
+
+In a second terminal:
+
+```bash
+cd Frontend
+npm run dev
+```
+
+Open `http://localhost:5173`.

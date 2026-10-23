@@ -1,0 +1,8 @@
+node_modules/
+dist/
+Backend/db/carbon_credits.db
+Backend/db/storage/
+Backend/storage/
+.env
+Backend/.env
+.DS_Store

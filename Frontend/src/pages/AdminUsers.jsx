@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
+import StatusBadge from '../components/StatusBadge';
+import ExportButton from '../components/ExportButton';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 
 export default function AdminUsers() {
   const { token } = useAuth();
+  const { t, date } = useI18n();
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
+  const roleNames = { buyer: t('Buyer'), seller: t('Seller'), admin: t('Admin') };
 
   useEffect(() => {
     api.get('/admin/users', token).then(setUsers).catch((err) => setError(err.message));
@@ -16,27 +21,24 @@ export default function AdminUsers() {
     <DashboardLayout>
       <div className="page-header">
         <div>
-          <div className="eyebrow">Administrator</div>
-          <h1>Registered users</h1>
+          <div className="eyebrow">{t('Administrator')}</div>
+          <h1>{t('Registered users')}</h1>
         </div>
+        <ExportButton path="/export/admin/users" />
       </div>
-
       {error ? <div className="form-error">{error}</div> : null}
-
-      <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card table-wrap">
         <table className="ledger-table">
-          <thead>
-            <tr><th>Name</th><th>Role</th><th>Organisation</th><th>Country</th><th>Status</th><th>Joined</th></tr>
-          </thead>
+          <thead><tr><th>{t('Name')}</th><th>{t('Role')}</th><th>{t('Organisation')}</th><th>{t('Country')}</th><th>{t('Status')}</th><th>{t('Joined')}</th></tr></thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.name}<div className="text-soft mono" style={{ fontSize: 11.5 }}>{u.email}</div></td>
-                <td className="text-soft">{u.role}</td>
+              <tr key={`${u.role}-${u.id}`}>
+                <td>{u.name}<div className="small text-soft mono">{u.email}</div></td>
+                <td>{roleNames[u.role]}</td>
                 <td className="text-soft">{u.organisation_name || '—'}</td>
-                <td className="text-soft">{u.country}</td>
-                <td><span className={`badge ${u.account_status === 'active' ? 'badge-verified' : 'badge-pending'}`}>{u.account_status}</span></td>
-                <td className="text-soft mono">{u.created_at.slice(0, 10)}</td>
+                <td className="text-soft">{u.country || '—'}</td>
+                <td><StatusBadge status={u.account_status} /></td>
+                <td className="small text-soft">{date(u.created_at)}</td>
               </tr>
             ))}
           </tbody>
